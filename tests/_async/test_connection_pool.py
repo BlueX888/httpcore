@@ -835,3 +835,34 @@ async def test_http11_upgrade_connection():
         "http11.response_closed.started",
         "http11.response_closed.complete",
     ]
+
+
+@pytest.mark.anyio
+async def test_connection_pool_discards_surplus_response_data():
+    """
+    Extra data after a complete response cannot belong to a request that we
+    have sent, so the connection must not be reused for the next request.
+    """
+    one = b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none"
+    extra = b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nextra"
+    two = b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo"
+
+    class ScriptedBackend(httpcore.AsyncMockBackend):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.buffers = iter([[one + extra], [two]])
+
+        async def connect_tcp(
+            self, *args: typing.Any, **kwargs: typing.Any
+        ) -> httpcore.AsyncNetworkStream:
+            return httpcore.AsyncMockStream(next(self.buffers))
+
+    network_backend = ScriptedBackend()
+    async with httpcore.AsyncConnectionPool(
+        network_backend=network_backend, max_connections=1
+    ) as pool:
+        first = await pool.request("GET", "http://example.com/one")
+        second = await pool.request("GET", "http://example.com/two")
+
+    assert first.content == b"one"
+    assert second.content == b"two"

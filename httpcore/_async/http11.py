@@ -237,9 +237,12 @@ class AsyncHTTP11Connection(AsyncConnectionInterface):
 
     async def _response_closed(self) -> None:
         async with self._state_lock:
+            # Extra data after a complete response cannot belong to a request
+            # that we have sent, so never reuse this connection.
             if (
                 self._h11_state.our_state is h11.DONE
                 and self._h11_state.their_state is h11.DONE
+                and not self._h11_state.trailing_data[0]
             ):
                 self._state = HTTPConnectionState.IDLE
                 self._h11_state.start_next_cycle()

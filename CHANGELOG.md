@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## Unreleased
 
 - Fix `max_keepalive_connections` not being properly handled. (#1000)
+- Close HTTP/1.1 connections when a complete response leaves trailing data, instead of reusing them and letting the next request read the surplus as its own response.
 
 ## Version 1.0.9 (April 24th, 2025)
 
